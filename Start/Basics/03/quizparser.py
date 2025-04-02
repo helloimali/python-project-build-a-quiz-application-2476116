@@ -24,6 +24,9 @@ class QuizParser(xml.sax.ContentHandler):
     def __init__(self):
         self.new_quiz = Quiz()
         #TODO: properties for the parser state and current question and answer
+        self._parse_state = QuizParserState.IDLE
+        self._current_question = None
+        self._current_answer = None
 
     def parse_quiz(self, quizpath):
         # load the file contents
@@ -33,6 +36,7 @@ class QuizParser(xml.sax.ContentHandler):
                 quiztext = quizfile.read()
 
         #TODO: parse the file
+        xml.sax.parseString(quiztext, self)
 
         # return the finished quiz
         return self.new_quiz
@@ -42,16 +46,50 @@ class QuizParser(xml.sax.ContentHandler):
             self._parse_state = QuizParserState.PARSE_QUIZ
             self.new_quiz.name = attrs["name"]
         #TODO: process the rest of the tags
+        elif tagname == "Description":
+            self._parse_state = QuizParserState.PARSE_DESCRIPTION
+        elif tagname == "Question":
+            self._parse_state = QuizParserState.PARSE_QUESTION
+            if attrs["type"] == "multichoice":
+                self._current_question = QuestionMC()
+            elif attrs["type"] == "tf":
+                self._current_question = QuestionTF()
+
+            self._current_question.points = int(attrs["points"])
+            self.new_quiz.total_points += self._current_question.points
+        elif tagname == "QuestionText":
+            self._parse_state = QuizParserState.PARSE_QUEST_TEXT
+            self._current_question.correct_answer = attrs["answer"]
+        elif tagname == "Answer":
+            self._current_answer = Answer()
+            self._current_answer.name = attrs["name"]
+            self._parse_state = QuizParserState.PARSE_ANSWER
+        
 
     def endElement(self, tagname):
         if tagname == "QuizML":
             self._parse_state = QuizParserState.IDLE
         #TODO: process the rest of the tags
+        elif tagname == "Description":
+            self._parse_state = QuizParserState.PARSE_QUIZ
+        elif tagname == "Question":
+            self.new_quiz.questions.append(self._current_question)
+            self._parse_state = QuizParserState.PARSE_QUIZ
+        elif tagname == "QuestionText":
+            self._parse_state = QuizParserState.PARSE_QUESTION
+        elif tagname == "Answer":
+            self._current_question.answers.append(self._current_answer)
+            self._parse_state = QuizParserState.PARSE_QUESTION
 
     def characters(self, chars):
         #TODO: process the text content
-        pass
-
+        if self._parse_state == QuizParserState.PARSE_DESCRIPTION:
+            self.new_quiz.description += chars
+        if self._parse_state == QuizParserState.PARSE_QUEST_TEXT:
+            self._current_question.text += chars
+        if self._parse_state == QuizParserState.PARSE_ANSWER:
+            self._current_answer.text += chars
+        
 
 if __name__ == "__main__":
     app = QuizParser()
